@@ -1,0 +1,19 @@
+<html>
+<head>
+<title>MikroTik Failover - Event Log</title>
+</head>
+<body>
+<h1>Event Log</h1>
+<p>This module displays all events recorded by the MikroTik Failover daemon.</p>
+<h2>Columns</h2>
+<ul>
+<li><b>Timestamp</b>: Date and time of the event</li>
+<li><b>Trunk</b>: Name of the affected trunk</li>
+<li><b>Event</b>: Type of event (UNREACHABLE, RECOVERY, etc.)</li>
+<li><b>IP</b>: IP address of the trunk</li>
+<li><b>Ping</b>: Result of the ping test</li>
+<li><b>Action</b>: Action taken by the daemon</li>
+<li><b>Status</b>: Result of the action</li>
+</ul>
+</body>
+</html>

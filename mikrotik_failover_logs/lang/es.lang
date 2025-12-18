@@ -1,0 +1,19 @@
+<?php
+global $arrLangModule;
+$arrLangModule = array(
+    "Event Log" => "Registro de Eventos",
+    "Timestamp" => "Fecha/Hora",
+    "Trunk" => "Troncal",
+    "Event Type" => "Tipo de Evento",
+    "IP" => "IP",
+    "Ping" => "Ping",
+    "Action" => "Accion",
+    "Status" => "Estado",
+    "Search" => "Buscar",
+    "Show" => "Mostrar",
+    "Clear Logs" => "Limpiar Registros",
+    "Are you sure you want to clear all logs?" => "Esta seguro que desea eliminar todos los registros?",
+    "Event logs cleared successfully" => "Registros eliminados correctamente",
+    "Error clearing logs" => "Error al eliminar registros",
+);
+?>

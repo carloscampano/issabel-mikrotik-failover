@@ -1,0 +1,156 @@
+#!/usr/bin/php
+<?php
+/* vim: set expandtab tabstop=4 softtabstop=4 shiftwidth=4:
+  Codificación: UTF-8
+  +----------------------------------------------------------------------+
+  | MikroTik Failover - Helper Script for issabel-helper                 |
+  +----------------------------------------------------------------------+
+  | Manage the MikroTik Failover daemon                                  |
+  +----------------------------------------------------------------------+
+*/
+
+define('DAEMON_PATH', '/var/www/html/modules/mikrotik_failover/libs/mikrotik_failover_daemon.php');
+define('PID_FILE', '/var/run/mikrotik_failover.pid');
+define('LOG_FILE', '/var/log/mikrotik_failover.log');
+
+if ($argc < 2) {
+    echo "Usage: mikrotikfailover --start|--stop|--status|--restart|--enable|--disable\n";
+    exit(1);
+}
+
+$action = $argv[1];
+
+switch ($action) {
+    case '--start':
+        start_daemon();
+        break;
+    case '--stop':
+        stop_daemon();
+        break;
+    case '--status':
+        show_status();
+        break;
+    case '--restart':
+        stop_daemon();
+        sleep(2);
+        start_daemon();
+        break;
+    case '--enable':
+        enable_autostart();
+        break;
+    case '--disable':
+        disable_autostart();
+        break;
+    default:
+        echo "Unknown action: $action\n";
+        echo "Usage: mikrotikfailover --start|--stop|--status|--restart|--enable|--disable\n";
+        exit(1);
+}
+
+function start_daemon() {
+    // Verificar si ya está corriendo
+    if (is_daemon_running()) {
+        echo "Daemon is already running\n";
+        exit(1);
+    }
+
+    // Iniciar el daemon en background
+    $cmd = "/usr/bin/php " . escapeshellarg(DAEMON_PATH) . " >> " . LOG_FILE . " 2>&1 &";
+    exec($cmd);
+
+    // Esperar un momento para verificar que inició
+    sleep(2);
+
+    if (is_daemon_running()) {
+        $pid = file_get_contents(PID_FILE);
+        echo "Daemon started successfully (PID: $pid)\n";
+        exit(0);
+    } else {
+        echo "Failed to start daemon. Check " . LOG_FILE . " for details.\n";
+        exit(1);
+    }
+}
+
+function stop_daemon() {
+    if (!is_daemon_running()) {
+        echo "Daemon is not running\n";
+        // Limpiar PID file si existe
+        if (file_exists(PID_FILE)) {
+            unlink(PID_FILE);
+        }
+        exit(0);
+    }
+
+    $pid = trim(file_get_contents(PID_FILE));
+
+    // Enviar SIGTERM
+    posix_kill($pid, SIGTERM);
+
+    // Esperar hasta 10 segundos
+    $timeout = 10;
+    while ($timeout > 0 && is_daemon_running()) {
+        sleep(1);
+        $timeout--;
+    }
+
+    if (is_daemon_running()) {
+        // Forzar con SIGKILL
+        posix_kill($pid, SIGKILL);
+        sleep(1);
+    }
+
+    if (file_exists(PID_FILE)) {
+        unlink(PID_FILE);
+    }
+
+    echo "Daemon stopped\n";
+    exit(0);
+}
+
+function show_status() {
+    if (is_daemon_running()) {
+        $pid = trim(file_get_contents(PID_FILE));
+        echo "Daemon is running (PID: $pid)\n";
+        exit(0);
+    } else {
+        echo "Daemon is not running\n";
+        exit(1);
+    }
+}
+
+function is_daemon_running() {
+    if (!file_exists(PID_FILE)) {
+        return false;
+    }
+
+    $pid = trim(file_get_contents(PID_FILE));
+    if (empty($pid)) {
+        return false;
+    }
+
+    // Verificar si el proceso existe
+    return posix_kill($pid, 0);
+}
+
+function enable_autostart() {
+    exec('systemctl enable mikrotik-failover 2>&1', $output, $retval);
+    if ($retval == 0) {
+        echo "Autostart enabled\n";
+        exit(0);
+    } else {
+        echo "Failed to enable autostart: " . implode("\n", $output) . "\n";
+        exit(1);
+    }
+}
+
+function disable_autostart() {
+    exec('systemctl disable mikrotik-failover 2>&1', $output, $retval);
+    if ($retval == 0) {
+        echo "Autostart disabled\n";
+        exit(0);
+    } else {
+        echo "Failed to disable autostart: " . implode("\n", $output) . "\n";
+        exit(1);
+    }
+}
+?>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module>
+  <menulist>
+    <!-- Parent menu item (folder) -->
+    <menuitem menuid="mikrotik_failover_menu" desc="MikroTik Failover" parent="pbxconfig" module="no" link="" order="50"></menuitem>
+    <!-- Configuration submenu -->
+    <menuitem menuid="mikrotik_failover" desc="Configuracion" parent="mikrotik_failover_menu" module="yes" link="" order="1"></menuitem>
+    <!-- Logs submenu -->
+    <menuitem menuid="mikrotik_failover_logs" desc="Registro de Eventos" parent="mikrotik_failover_menu" module="yes" link="" order="2"></menuitem>
+  </menulist>
+  <permissionslist>
+    <resource id="mikrotik_failover" desc="MikroTik Failover - Configuracion">
+      <action name="access" desc="Access"/>
+    </resource>
+    <resource id="mikrotik_failover_logs" desc="MikroTik Failover - Logs">
+      <action name="access" desc="Access"/>
+    </resource>
+  </permissionslist>
+</module>

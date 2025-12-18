@@ -1,0 +1,67 @@
+<html>
+<head>
+<title>MikroTik Failover Help</title>
+</head>
+<body>
+<h1>MikroTik Failover Module</h1>
+
+<h2>Description</h2>
+<p>This module monitors SIP trunks and automatically executes commands on a MikroTik router when a trunk becomes unreachable but its IP address responds to ping.</p>
+
+<h2>Configuration</h2>
+
+<h3>MikroTik Configuration</h3>
+<ul>
+<li><b>IP Address:</b> The IP address of your MikroTik router</li>
+<li><b>SSH Port:</b> The SSH port (default: 22)</li>
+<li><b>Username:</b> SSH username (usually admin)</li>
+<li><b>Password:</b> SSH password</li>
+</ul>
+
+<h3>SMTP Configuration</h3>
+<p>Configure SMTP settings to receive email notifications when events occur.</p>
+<ul>
+<li><b>SMTP Server:</b> Your SMTP server address</li>
+<li><b>Port:</b> SMTP port (587 for TLS, 465 for SSL)</li>
+<li><b>Username/Password:</b> SMTP authentication credentials</li>
+<li><b>From Email:</b> Sender email address</li>
+<li><b>To Email:</b> Recipient email address for notifications</li>
+</ul>
+
+<h3>Monitoring Configuration</h3>
+<ul>
+<li><b>Delay before action:</b> Wait this many seconds after detecting trunk down before taking action</li>
+<li><b>Retry Mode:</b> Single (execute once) or Multiple (retry on failure)</li>
+<li><b>Retry Count:</b> Number of retry attempts if Multiple mode is selected</li>
+<li><b>Retry Interval:</b> Seconds between retries</li>
+<li><b>Cooldown Period:</b> Minimum time between actions for the same trunk</li>
+</ul>
+
+<h3>Commands</h3>
+<p>Add MikroTik commands to execute when a trunk fails. Commands are executed in order by their order number.</p>
+<p>Example commands:</p>
+<ul>
+<li><code>/interface pppoe-client disable pppoe-out1</code></li>
+<li><code>/interface pppoe-client enable pppoe-out1</code></li>
+<li><code>/ip firewall connection remove</code></li>
+</ul>
+
+<h3>Monitored Trunks</h3>
+<p>Select which SIP trunks to monitor. Only enabled trunks will trigger the failover action.</p>
+
+<h2>How it Works</h2>
+<ol>
+<li>The daemon listens to Asterisk Manager Interface (AMI) events</li>
+<li>When a monitored trunk changes status to UNREACHABLE</li>
+<li>The system waits for the configured delay</li>
+<li>A ping test is performed to the trunk's IP address</li>
+<li>If ping succeeds (indicating router issue, not network down), commands are executed on MikroTik</li>
+<li>An email notification is sent</li>
+<li>The event is logged in the database</li>
+</ol>
+
+<h2>Troubleshooting</h2>
+<p>Check the log file at <code>/var/log/mikrotik_failover.log</code> for detailed information about daemon operation and any errors.</p>
+
+</body>
+</html>

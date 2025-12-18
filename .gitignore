@@ -1,0 +1,24 @@
+# Build artifacts
+rpm/BUILD_DIR/
+rpm/SOURCES/
+rpm/output/srpms/
+rpm/build/
+rpm/RPMS/
+
+# macOS
+.DS_Store
+*.jpg
+*.png
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test files
+test_*.php
+
+# Temporary
+*.tmp
+*.log

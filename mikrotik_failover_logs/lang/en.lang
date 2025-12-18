@@ -1,0 +1,19 @@
+<?php
+global $arrLangModule;
+$arrLangModule = array(
+    "Event Log" => "Event Log",
+    "Timestamp" => "Timestamp",
+    "Trunk" => "Trunk",
+    "Event Type" => "Event Type",
+    "IP" => "IP",
+    "Ping" => "Ping",
+    "Action" => "Action",
+    "Status" => "Status",
+    "Search" => "Search",
+    "Show" => "Show",
+    "Clear Logs" => "Clear Logs",
+    "Are you sure you want to clear all logs?" => "Are you sure you want to clear all logs?",
+    "Event logs cleared successfully" => "Event logs cleared successfully",
+    "Error clearing logs" => "Error clearing logs",
+);
+?>

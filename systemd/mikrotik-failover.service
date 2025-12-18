@@ -1,0 +1,20 @@
+[Unit]
+Description=MikroTik Failover Daemon for Issabel
+After=network.target asterisk.service
+Wants=asterisk.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/php /var/www/html/modules/mikrotik_failover/libs/mikrotik_failover_daemon.php
+ExecStop=/usr/bin/issabel-helper mikrotikfailover --stop
+PIDFile=/var/run/mikrotik_failover.pid
+Restart=on-failure
+RestartSec=10
+User=root
+Group=root
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=mikrotik-failover
+
+[Install]
+WantedBy=multi-user.target
