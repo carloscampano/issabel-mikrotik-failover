@@ -74,6 +74,9 @@ function _moduleContent(&$smarty, $module_name)
         case 'delete_command':
             $content = deleteCommand($smarty, $module_name, $local_templates_dir, $pMikrotik);
             break;
+        case 'generate_script':
+            $content = generateScript($smarty, $module_name, $local_templates_dir, $pMikrotik);
+            break;
 
         // Trunks
         case 'add_trunk':
@@ -179,6 +182,9 @@ function showMainConfig($smarty, $module_name, $local_templates_dir, &$pMikrotik
     $smarty->assign('LBL_EDIT', _tr('Edit'));
     $smarty->assign('LBL_DELETE', _tr('Delete'));
     $smarty->assign('LBL_ACTIONS', _tr('Actions'));
+    $smarty->assign('LBL_GENERATE_SCRIPT', _tr('Generate Script'));
+    $smarty->assign('LBL_GENERATE_SCRIPT_DESC', _tr('Auto-generate script to clear connection tracking for trunk IPs and PBX IP'));
+    $smarty->assign('LBL_GENERATE_SCRIPT_CONFIRM', _tr('This will replace existing commands. Continue?'));
 
     $smarty->assign('LBL_TRUNKS', _tr('Monitored Trunks'));
     $smarty->assign('LBL_TRUNK_NAME', _tr('Trunk Name'));
@@ -352,6 +358,33 @@ function deleteCommand($smarty, $module_name, $local_templates_dir, &$pMikrotik)
         $smarty->assign('mb_message', _tr('Command deleted successfully'));
     } else {
         $smarty->assign('mb_message', _tr('Error deleting command') . ': ' . $pMikrotik->errMsg);
+    }
+
+    return showMainConfig($smarty, $module_name, $local_templates_dir, $pMikrotik);
+}
+
+function generateScript($smarty, $module_name, $local_templates_dir, &$pMikrotik)
+{
+    // Upload script to MikroTik
+    $result = $pMikrotik->uploadScriptToMikrotik();
+
+    if (!$result['success']) {
+        $smarty->assign('mb_message', _tr('Error generating script') . ': ' . $result['message']);
+        return showMainConfig($smarty, $module_name, $local_templates_dir, $pMikrotik);
+    }
+
+    // Delete existing commands
+    $commands = $pMikrotik->getCommands();
+    foreach ($commands as $cmd) {
+        $pMikrotik->deleteCommand($cmd['id']);
+    }
+
+    // Add command to import the script file
+    $description = 'Import delete_conn.rsc (IPs: ' . implode(', ', $result['ips']) . ')';
+    if ($pMikrotik->addCommand('/import file-name=delete_conn.rsc', $description, 1)) {
+        $smarty->assign('mb_message', _tr('Script generated successfully') . '. ' . _tr('Script uploaded to MikroTik') . '. IPs: ' . implode(', ', $result['ips']));
+    } else {
+        $smarty->assign('mb_message', _tr('Error generating script') . ': ' . $pMikrotik->errMsg);
     }
 
     return showMainConfig($smarty, $module_name, $local_templates_dir, $pMikrotik);
@@ -588,6 +621,8 @@ function getAction()
         return "edit_command";
     if (getParameter("delete_command"))
         return "delete_command";
+    if (getParameter("generate_script"))
+        return "generate_script";
 
     // Trunks
     if (getParameter("add_trunk"))

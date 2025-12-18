@@ -1328,6 +1328,18 @@
                     <button type="submit" class="btn btn-success btn-sm"><i class="fa fa-plus"></i></button>
                 </div>
             </form>
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--gray-200);">
+                <form method="POST" name="form_generate_script" style="display: inline;">
+                    <input type="hidden" name="menu" value="{$MODULE_NAME}">
+                    <input type="hidden" name="generate_script" value="1">
+                    <button type="submit" class="btn btn-primary" onclick="return confirm('{$LBL_GENERATE_SCRIPT_CONFIRM}')">
+                        <i class="fa fa-magic"></i> {$LBL_GENERATE_SCRIPT}
+                    </button>
+                </form>
+                <small style="display: block; margin-top: 8px; color: var(--gray-600);">
+                    {$LBL_GENERATE_SCRIPT_DESC}
+                </small>
+            </div>
         </div>
     </div>
 

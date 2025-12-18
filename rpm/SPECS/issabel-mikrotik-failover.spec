@@ -2,7 +2,7 @@
 %define modname_logs mikrotik_failover_logs
 
 Name:           issabel-mikrotik-failover
-Version:        1.0.26
+Version:        1.0.29
 Release:        1%{?dist}
 Summary:        MikroTik Failover Module for Issabel PBX
 License:        GPLv3+
@@ -154,6 +154,11 @@ fi
 /etc/systemd/system/mikrotik-failover.service
 
 %changelog
+* Thu Dec 18 2024 Developer <dev@example.com> - 1.0.29-1
+- Fixed script upload to MikroTik using SFTP method
+- Changed failover command to use /import file-name=delete_conn.rsc
+- Script file is now stored as .rsc file on MikroTik for reliable execution
+
 * Tue Dec 17 2024 Developer <dev@example.com> - 1.0.24-1
 - Added auto-start on boot checkbox option in daemon section
 - Added --enable and --disable options to privileged helper

@@ -90,5 +90,12 @@ $arrLangModule = array(
     "Are you sure you want to clear all logs?" => "Are you sure you want to clear all logs?",
     "mikrotik_failover_logs" => "mikrotik_failover_logs",
     "Event Type" => "Event Type",
+    "Generate Script" => "Generate Script",
+    "Auto-generate script to clear connection tracking for trunk IPs and PBX IP" => "Auto-generate script to clear connection tracking for trunk IPs and PBX IP",
+    "This will replace existing commands. Continue?" => "This will replace existing commands. Continue?",
+    "Script generated successfully" => "Script generated successfully",
+    "Error generating script" => "Error generating script",
+    "No IPs found. Add monitored trunks first." => "No IPs found. Add monitored trunks first.",
+    "Script uploaded to MikroTik" => "Script uploaded to MikroTik",
 );
 ?>

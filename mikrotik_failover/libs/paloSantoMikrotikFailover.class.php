@@ -598,6 +598,220 @@ class paloSantoMikrotikFailover {
     }
 
     /**
+     * Get local PBX IP address (primary interface)
+     */
+    function getLocalPbxIp()
+    {
+        // Try to get IP from hostname
+        $output = array();
+        exec("hostname -I 2>/dev/null | awk '{print $1}'", $output);
+        if (!empty($output[0])) {
+            return trim($output[0]);
+        }
+
+        // Fallback: get from default route interface
+        $output = array();
+        exec("ip route get 8.8.8.8 2>/dev/null | grep -oP 'src \\K[0-9.]+'", $output);
+        if (!empty($output[0])) {
+            return trim($output[0]);
+        }
+
+        return null;
+    }
+
+    /**
+     * Get trunk IP from Asterisk
+     */
+    function getTrunkIp($trunk_name)
+    {
+        $output = array();
+        exec("/usr/sbin/asterisk -rx 'sip show peer " . escapeshellarg($trunk_name) . "' 2>/dev/null", $output);
+
+        foreach ($output as $line) {
+            if (preg_match('/^\s*Addr->IP\s*:\s*(\d+\.\d+\.\d+\.\d+)/', $line, $matches)) {
+                return $matches[1];
+            }
+            if (preg_match('/^\s*Tohost\s*:\s*(\d+\.\d+\.\d+\.\d+)/', $line, $matches)) {
+                return $matches[1];
+            }
+        }
+
+        // Try from sip show peers
+        $output = array();
+        exec("/usr/sbin/asterisk -rx 'sip show peers' 2>/dev/null", $output);
+        foreach ($output as $line) {
+            if (preg_match('/^' . preg_quote($trunk_name, '/') . '\s+(\d+\.\d+\.\d+\.\d+)/', $line, $matches)) {
+                return $matches[1];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Generate MikroTik script content to clear connection tracking for trunk IPs
+     */
+    function generateMikrotikScriptContent()
+    {
+        $ips = array();
+
+        // Get local PBX IP
+        $localIp = $this->getLocalPbxIp();
+        if ($localIp) {
+            $ips[] = $localIp;
+        }
+
+        // Get IPs of all monitored trunks
+        $trunks = $this->getMonitoredTrunks();
+        foreach ($trunks as $trunk) {
+            $ip = $this->getTrunkIp($trunk['trunk_name']);
+            if ($ip && !in_array($ip, $ips)) {
+                $ips[] = $ip;
+            }
+        }
+
+        if (empty($ips)) {
+            return null;
+        }
+
+        // Build the IP array string for MikroTik
+        $ipArrayStr = '{"' . implode('";"', $ips) . '"}';
+
+        // Generate the script
+        $script = ':local ips ' . $ipArrayStr . '
+
+:foreach ip in=$ips do={
+    :log warning "=========================================="
+    :log warning ("Procesando conexiones para IP: " . $ip)
+    :log warning "=========================================="
+
+    :log info ("--- Conexiones donde " . $ip . " es ORIGEN ---")
+    :local countSrc 0
+    :foreach conn in=[/ip/firewall/connection find src-address~$ip] do={
+        :do {
+            :local connData [/ip/firewall/connection get $conn]
+            :local srcAddr ($connData->"src-address")
+            :local dstAddr ($connData->"dst-address")
+            :local protocol ($connData->"protocol")
+            :local connState ($connData->"connection-state")
+            :log info ("ELIMINANDO - SRC: " . $srcAddr . " -> DST: " . $dstAddr . " | Proto: " . $protocol . " | Estado: " . $connState)
+            /ip/firewall/connection remove $conn
+            :set countSrc ($countSrc + 1)
+        } on-error={
+            :log info ("Conexion ya no existe (expiro o fue eliminada)")
+        }
+    }
+    :if ($countSrc > 0) do={
+        :log warning ("Eliminadas " . $countSrc . " conexiones como origen")
+    } else={
+        :log info "No se encontraron conexiones como origen"
+    }
+
+    :log info ("--- Conexiones donde " . $ip . " es DESTINO ---")
+    :local countDst 0
+    :foreach conn in=[/ip/firewall/connection find dst-address~$ip] do={
+        :do {
+            :local connData [/ip/firewall/connection get $conn]
+            :local srcAddr ($connData->"src-address")
+            :local dstAddr ($connData->"dst-address")
+            :local protocol ($connData->"protocol")
+            :local connState ($connData->"connection-state")
+            :log info ("ELIMINANDO - SRC: " . $srcAddr . " -> DST: " . $dstAddr . " | Proto: " . $protocol . " | Estado: " . $connState)
+            /ip/firewall/connection remove $conn
+            :set countDst ($countDst + 1)
+        } on-error={
+            :log info ("Conexion ya no existe (expiro o fue eliminada)")
+        }
+    }
+    :if ($countDst > 0) do={
+        :log warning ("Eliminadas " . $countDst . " conexiones como destino")
+    } else={
+        :log info "No se encontraron conexiones como destino"
+    }
+}
+
+:log warning "=========================================="
+:log warning "Proceso de limpieza finalizado"
+:log warning "=========================================="';
+
+        return array(
+            'script' => $script,
+            'ips' => $ips
+        );
+    }
+
+    /**
+     * Upload script to MikroTik using SFTP
+     * Creates delete_conn.rsc file on MikroTik that can be imported
+     */
+    function uploadScriptToMikrotik()
+    {
+        $mikrotikConfig = $this->getMikrotikConfig();
+        if (!$mikrotikConfig) {
+            return array('success' => false, 'message' => 'MikroTik not configured');
+        }
+
+        $scriptData = $this->generateMikrotikScriptContent();
+        if ($scriptData === null) {
+            return array('success' => false, 'message' => 'No IPs found. Add monitored trunks first.');
+        }
+
+        $ip = $mikrotikConfig['ip'];
+        $port = $mikrotikConfig['port'];
+        $user = $mikrotikConfig['user'];
+        $password = $mikrotikConfig['password'];
+
+        // Check if ssh2 extension is loaded
+        if (!function_exists('ssh2_connect')) {
+            return array('success' => false, 'message' => 'SSH2 extension not installed');
+        }
+
+        // Connect to MikroTik
+        $connection = @ssh2_connect($ip, intval($port));
+        if (!$connection) {
+            return array('success' => false, 'message' => 'Cannot connect to MikroTik at ' . $ip . ':' . $port);
+        }
+
+        if (!@ssh2_auth_password($connection, $user, $password)) {
+            return array('success' => false, 'message' => 'Authentication failed');
+        }
+
+        // Initialize SFTP
+        $sftp = @ssh2_sftp($connection);
+        if (!$sftp) {
+            return array('success' => false, 'message' => 'Could not initialize SFTP subsystem');
+        }
+
+        // Upload script content as .rsc file
+        $scriptContent = $scriptData['script'];
+        $remoteFile = "ssh2.sftp://" . intval($sftp) . "/delete_conn.rsc";
+
+        $result = @file_put_contents($remoteFile, $scriptContent);
+        if ($result === false) {
+            return array('success' => false, 'message' => 'Failed to upload script file to MikroTik');
+        }
+
+        // Verify file was uploaded
+        usleep(500000);
+        $stream = @ssh2_exec($connection, '/file print where name=delete_conn.rsc');
+        if ($stream) {
+            stream_set_blocking($stream, true);
+            $verifyOutput = stream_get_contents($stream);
+            fclose($stream);
+
+            if (strpos($verifyOutput, 'delete_conn.rsc') === false) {
+                return array('success' => false, 'message' => 'Script file upload could not be verified');
+            }
+        }
+
+        return array(
+            'success' => true,
+            'message' => 'Script uploaded successfully',
+            'ips' => $scriptData['ips']
+        );
+    }
+
+    /**
      * Get daemon status with process verification
      */
     function getDaemonStatusRealtime()
