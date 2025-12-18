@@ -2,7 +2,7 @@
 %define modname_logs mikrotik_failover_logs
 
 Name:           issabel-mikrotik-failover
-Version:        1.0.29
+Version:        1.0.30
 Release:        1%{?dist}
 Summary:        MikroTik Failover Module for Issabel PBX
 License:        GPLv3+
@@ -154,6 +154,12 @@ fi
 /etc/systemd/system/mikrotik-failover.service
 
 %changelog
+* Thu Dec 18 2024 Developer <dev@example.com> - 1.0.30-1
+- Generate Script now creates persistent del_conn script in MikroTik
+- Script is uploaded via SFTP and then registered as system script
+- Failover command is now /system script run del_conn
+- Script can be viewed/edited in MikroTik System > Scripts
+
 * Thu Dec 18 2024 Developer <dev@example.com> - 1.0.29-1
 - Fixed script upload to MikroTik using SFTP method
 - Changed failover command to use /import file-name=delete_conn.rsc

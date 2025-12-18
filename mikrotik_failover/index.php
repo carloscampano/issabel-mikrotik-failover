@@ -379,9 +379,9 @@ function generateScript($smarty, $module_name, $local_templates_dir, &$pMikrotik
         $pMikrotik->deleteCommand($cmd['id']);
     }
 
-    // Add command to import the script file
-    $description = 'Import delete_conn.rsc (IPs: ' . implode(', ', $result['ips']) . ')';
-    if ($pMikrotik->addCommand('/import file-name=delete_conn.rsc', $description, 1)) {
+    // Add command to run the del_conn script
+    $description = 'Run del_conn script (IPs: ' . implode(', ', $result['ips']) . ')';
+    if ($pMikrotik->addCommand('/system script run del_conn', $description, 1)) {
         $smarty->assign('mb_message', _tr('Script generated successfully') . '. ' . _tr('Script uploaded to MikroTik') . '. IPs: ' . implode(', ', $result['ips']));
     } else {
         $smarty->assign('mb_message', _tr('Error generating script') . ': ' . $pMikrotik->errMsg);

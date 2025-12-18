@@ -741,8 +741,9 @@ class paloSantoMikrotikFailover {
     }
 
     /**
-     * Upload script to MikroTik using SFTP
-     * Creates delete_conn.rsc file on MikroTik that can be imported
+     * Upload script to MikroTik using SFTP and create persistent script del_conn
+     * 1. Uploads script content as .rsc file via SFTP
+     * 2. Creates/updates del_conn script in MikroTik from file content
      */
     function uploadScriptToMikrotik()
     {
@@ -784,29 +785,51 @@ class paloSantoMikrotikFailover {
 
         // Upload script content as .rsc file
         $scriptContent = $scriptData['script'];
-        $remoteFile = "ssh2.sftp://" . intval($sftp) . "/delete_conn.rsc";
+        $remoteFile = "ssh2.sftp://" . intval($sftp) . "/del_conn_source.rsc";
 
         $result = @file_put_contents($remoteFile, $scriptContent);
         if ($result === false) {
             return array('success' => false, 'message' => 'Failed to upload script file to MikroTik');
         }
 
-        // Verify file was uploaded
+        // Wait for file to be written
+        sleep(1);
+
+        // Remove existing del_conn script if exists
+        $stream = @ssh2_exec($connection, '/system script remove [find name=del_conn]');
+        if ($stream) {
+            stream_set_blocking($stream, true);
+            stream_get_contents($stream);
+            fclose($stream);
+        }
         usleep(500000);
-        $stream = @ssh2_exec($connection, '/file print where name=delete_conn.rsc');
+
+        // Create del_conn script from file content
+        // RouterOS 7 syntax: read file content and use as script source
+        $stream = @ssh2_exec($connection, '/system script add name=del_conn source=[/file get del_conn_source.rsc contents]');
+        if (!$stream) {
+            return array('success' => false, 'message' => 'Failed to create script on MikroTik');
+        }
+        stream_set_blocking($stream, true);
+        $output = stream_get_contents($stream);
+        fclose($stream);
+
+        // Wait and verify script was created
+        sleep(1);
+        $stream = @ssh2_exec($connection, '/system script print where name=del_conn');
         if ($stream) {
             stream_set_blocking($stream, true);
             $verifyOutput = stream_get_contents($stream);
             fclose($stream);
 
-            if (strpos($verifyOutput, 'delete_conn.rsc') === false) {
-                return array('success' => false, 'message' => 'Script file upload could not be verified');
+            if (strpos($verifyOutput, 'del_conn') === false) {
+                return array('success' => false, 'message' => 'Script del_conn creation could not be verified. Output: ' . $output);
             }
         }
 
         return array(
             'success' => true,
-            'message' => 'Script uploaded successfully',
+            'message' => 'Script del_conn created successfully',
             'ips' => $scriptData['ips']
         );
     }
