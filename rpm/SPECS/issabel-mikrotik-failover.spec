@@ -2,7 +2,7 @@
 %define modname_logs mikrotik_failover_logs
 
 Name:           issabel-mikrotik-failover
-Version:        1.0.30
+Version:        1.0.31
 Release:        1%{?dist}
 Summary:        MikroTik Failover Module for Issabel PBX
 License:        GPLv3+
@@ -111,6 +111,9 @@ systemctl daemon-reload
 systemctl enable mikrotik-failover 2>/dev/null || true
 systemctl start mikrotik-failover 2>/dev/null || true
 
+# Restart Apache to load SSH2 extension
+systemctl restart httpd 2>/dev/null || true
+
 echo ""
 echo "============================================"
 echo "MikroTik Failover Module installed!"
@@ -154,6 +157,9 @@ fi
 /etc/systemd/system/mikrotik-failover.service
 
 %changelog
+* Fri Dec 20 2024 Developer <dev@example.com> - 1.0.31-1
+- Added Apache restart in post-install to load SSH2 extension
+
 * Thu Dec 18 2024 Developer <dev@example.com> - 1.0.30-1
 - Generate Script now creates persistent del_conn script in MikroTik
 - Script is uploaded via SFTP and then registered as system script

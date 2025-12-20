@@ -26,13 +26,10 @@ Module for Issabel PBX that monitors SIP trunks and executes commands on a Mikro
 
 ```bash
 # Download the latest RPM
-wget https://github.com/campano/issabel-mikrotik-failover/releases/latest/download/issabel-mikrotik-failover-1.0.26-1.el7.noarch.rpm
+wget https://github.com/campano/issabel-mikrotik-failover/releases/latest/download/issabel-mikrotik-failover-1.0.31-1.el7.noarch.rpm
 
 # Install
-yum localinstall -y issabel-mikrotik-failover-1.0.26-1.el7.noarch.rpm
-
-# Restart Apache
-systemctl restart httpd
+yum localinstall -y issabel-mikrotik-failover-1.0.31-1.el7.noarch.rpm
 ```
 
 The module will be available at: **PBX > PBX Configuration > MikroTik Failover**
@@ -196,12 +193,24 @@ asterisk -rx "manager show connected"
 ### Build RPM
 ```bash
 cd rpm
-./build.sh 1.0.26
+./build.sh 1.0.31
 ```
 
 RPM will be created in `rpm/output/noarch/`
 
 ## Version History
+
+### v1.0.31 (2024-12-20)
+- Added Apache restart in post-install to load SSH2 extension automatically
+
+### v1.0.30 (2024-12-18)
+- Generate Script creates persistent `del_conn` script in MikroTik
+- Script uploaded via SFTP and registered as system script
+- Failover command now uses `/system script run del_conn`
+
+### v1.0.29 (2024-12-18)
+- Fixed script upload to MikroTik using SFTP method
+- Changed failover command to use `/import file-name=delete_conn.rsc`
 
 ### v1.0.26 (2024-12-18)
 - Monitoring enabled by default on fresh install
