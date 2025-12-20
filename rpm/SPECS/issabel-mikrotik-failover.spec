@@ -2,7 +2,7 @@
 %define modname_logs mikrotik_failover_logs
 
 Name:           issabel-mikrotik-failover
-Version:        1.0.32
+Version:        1.0.33
 Release:        1%{?dist}
 Summary:        MikroTik Failover Module for Issabel PBX
 License:        GPLv3+
@@ -157,6 +157,11 @@ fi
 /etc/systemd/system/mikrotik-failover.service
 
 %changelog
+* Fri Dec 20 2024 Developer <dev@example.com> - 1.0.33-1
+- Added support for Registry AMI events (SIP trunks with registration)
+- Now detects both PeerStatus and Registry events for trunk monitoring
+- Emails sent on trunk down (Request Sent/Unregistered) and restored (Registered)
+
 * Fri Dec 20 2024 Developer <dev@example.com> - 1.0.32-1
 - Fixed email notifications to use PHPMailer with SMTP configuration
 - Emails now sent on trunk state changes (unreachable/restored)

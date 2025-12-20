@@ -553,10 +553,15 @@ while ($running) {
     $event = read_ami_event();
 
     if ($event && isset($event['Event'])) {
-        // Buscar eventos de estado de peer
+        $trunk_name = null;
+        $peer_status = null;
+        $event_type = null;
+
+        // Evento PeerStatus (para peers sin registro)
         if ($event['Event'] == 'PeerStatus') {
             $peer = isset($event['Peer']) ? $event['Peer'] : '';
             $peer_status = isset($event['PeerStatus']) ? $event['PeerStatus'] : '';
+            $event_type = 'PeerStatus';
 
             // Extraer nombre del peer (puede venir como SIP/nombre)
             if (preg_match('/^SIP\/(.+)$/', $peer, $matches)) {
@@ -564,18 +569,60 @@ while ($running) {
             } else {
                 $trunk_name = $peer;
             }
+        }
+        // Evento Registry (para troncales con registro SIP)
+        elseif ($event['Event'] == 'Registry' && isset($event['ChannelType']) && $event['ChannelType'] == 'SIP') {
+            $username = isset($event['Username']) ? $event['Username'] : '';
+            $peer_status = isset($event['Status']) ? $event['Status'] : '';
+            $event_type = 'Registry';
 
-            // Verificar si este trunk está siendo monitoreado
+            // Buscar el trunk que usa este username
+            $monitored_trunks = get_monitored_trunks();
+            foreach ($monitored_trunks as $trunk) {
+                // El trunk puede contener el username o ser buscado por IP
+                if (strpos($trunk, $username) !== false || $trunk == $username) {
+                    $trunk_name = $trunk;
+                    break;
+                }
+            }
+
+            // Si no encontramos por nombre, buscar en la configuración de Asterisk
+            if (!$trunk_name && $username) {
+                $output = array();
+                exec("asterisk -rx 'sip show peers' 2>/dev/null | grep -i '$username'", $output);
+                foreach ($output as $line) {
+                    if (preg_match('/^(\S+)/', $line, $matches)) {
+                        $possible_trunk = explode('/', $matches[1])[0];
+                        if (in_array($possible_trunk, $monitored_trunks)) {
+                            $trunk_name = $possible_trunk;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Procesar el evento si tenemos trunk y status
+        if ($trunk_name && $peer_status) {
             $monitored_trunks = get_monitored_trunks();
 
             if (in_array($trunk_name, $monitored_trunks)) {
                 $prev_state = isset($trunk_states[$trunk_name]) ? $trunk_states[$trunk_name] : '';
 
-                log_message("PeerStatus event: $trunk_name -> $peer_status (prev: $prev_state)");
+                log_message("$event_type event: $trunk_name -> $peer_status (prev: $prev_state)");
 
-                if ($peer_status == 'Unreachable' && $prev_state != 'Unreachable') {
+                // Estados que indican que el trunk está caído
+                $down_states = array('Unreachable', 'Unregistered', 'Rejected', 'Request Sent', 'Timeout', 'No Authentication', 'Failed');
+                // Estados que indican que el trunk está operativo
+                $up_states = array('Reachable', 'Registered', 'Lagged');
+
+                $is_down = in_array($peer_status, $down_states);
+                $is_up = in_array($peer_status, $up_states);
+                $was_down = in_array($prev_state, $down_states);
+
+                if ($is_down && !$was_down) {
                     handle_trunk_unreachable($trunk_name);
-                } elseif ($peer_status == 'Reachable' && $prev_state == 'Unreachable') {
+                } elseif ($is_up && $was_down) {
                     handle_trunk_reachable($trunk_name);
                 }
 
