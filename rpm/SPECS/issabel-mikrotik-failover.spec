@@ -2,7 +2,7 @@
 %define modname_logs mikrotik_failover_logs
 
 Name:           issabel-mikrotik-failover
-Version:        1.0.31
+Version:        1.0.32
 Release:        1%{?dist}
 Summary:        MikroTik Failover Module for Issabel PBX
 License:        GPLv3+
@@ -157,6 +157,10 @@ fi
 /etc/systemd/system/mikrotik-failover.service
 
 %changelog
+* Fri Dec 20 2024 Developer <dev@example.com> - 1.0.32-1
+- Fixed email notifications to use PHPMailer with SMTP configuration
+- Emails now sent on trunk state changes (unreachable/restored)
+
 * Fri Dec 20 2024 Developer <dev@example.com> - 1.0.31-1
 - Added Apache restart in post-install to load SSH2 extension
 

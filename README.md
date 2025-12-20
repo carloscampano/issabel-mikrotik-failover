@@ -26,10 +26,10 @@ Module for Issabel PBX that monitors SIP trunks and executes commands on a Mikro
 
 ```bash
 # Download the latest RPM
-wget https://github.com/campano/issabel-mikrotik-failover/releases/latest/download/issabel-mikrotik-failover-1.0.31-1.el7.noarch.rpm
+wget https://github.com/campano/issabel-mikrotik-failover/releases/latest/download/issabel-mikrotik-failover-1.0.32-1.el7.noarch.rpm
 
 # Install
-yum localinstall -y issabel-mikrotik-failover-1.0.31-1.el7.noarch.rpm
+yum localinstall -y issabel-mikrotik-failover-1.0.32-1.el7.noarch.rpm
 ```
 
 The module will be available at: **PBX > PBX Configuration > MikroTik Failover**
@@ -193,12 +193,16 @@ asterisk -rx "manager show connected"
 ### Build RPM
 ```bash
 cd rpm
-./build.sh 1.0.31
+./build.sh 1.0.32
 ```
 
 RPM will be created in `rpm/output/noarch/`
 
 ## Version History
+
+### v1.0.32 (2024-12-20)
+- Fixed email notifications to use PHPMailer with SMTP configuration
+- Emails now properly sent on trunk state changes (unreachable/restored)
 
 ### v1.0.31 (2024-12-20)
 - Added Apache restart in post-install to load SSH2 extension automatically

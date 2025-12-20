@@ -248,14 +248,72 @@ function execute_mikrotik_commands() {
 function send_email_notification($subject, $body) {
     $smtp_config = get_config('smtp_config');
     if (!$smtp_config || !$smtp_config['enabled']) {
+        log_message("Email notifications disabled or not configured");
         return false;
     }
 
-    // Usar mail() simple o PHPMailer si está disponible
-    $headers = "From: " . $smtp_config['from_email'] . "\r\n";
-    $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    // Verificar que PHPMailer esté disponible
+    $phpmailer_paths = array(
+        '/usr/share/php/PHPMailer/PHPMailerAutoload.php',
+        '/usr/share/php/PHPMailer/src/PHPMailer.php',
+        '/usr/share/php/libphp-phpmailer/class.phpmailer.php',
+        '/usr/share/phpmailer/class.phpmailer.php'
+    );
 
-    return mail($smtp_config['to_email'], $subject, $body, $headers);
+    $phpmailer_loaded = false;
+    foreach ($phpmailer_paths as $path) {
+        if (file_exists($path)) {
+            require_once($path);
+            // Cargar SMTP si es necesario
+            $smtp_path = dirname($path) . '/class.smtp.php';
+            if (file_exists($smtp_path)) {
+                require_once($smtp_path);
+            }
+            $phpmailer_loaded = true;
+            break;
+        }
+    }
+
+    if (!$phpmailer_loaded) {
+        log_message("PHPMailer not found, cannot send email");
+        return false;
+    }
+
+    try {
+        $mail = new PHPMailer();
+        $mail->isSMTP();
+        $mail->Host = $smtp_config['server'];
+        $mail->Port = intval($smtp_config['port']);
+        $mail->SMTPAuth = true;
+        $mail->Username = $smtp_config['user'];
+        $mail->Password = $smtp_config['password'];
+
+        // Configurar seguridad según el puerto
+        $port = intval($smtp_config['port']);
+        if ($port == 465) {
+            $mail->SMTPSecure = 'ssl';
+        } elseif ($port == 587) {
+            $mail->SMTPSecure = 'tls';
+        }
+
+        $mail->setFrom($smtp_config['from_email'], 'MikroTik Failover');
+        $mail->addAddress($smtp_config['to_email']);
+
+        $mail->Subject = $subject;
+        $mail->Body = $body;
+        $mail->CharSet = 'UTF-8';
+
+        if ($mail->send()) {
+            log_message("Email sent successfully to " . $smtp_config['to_email']);
+            return true;
+        } else {
+            log_message("Email sending failed: " . $mail->ErrorInfo);
+            return false;
+        }
+    } catch (Exception $e) {
+        log_message("Email exception: " . $e->getMessage());
+        return false;
+    }
 }
 
 function connect_ami() {
