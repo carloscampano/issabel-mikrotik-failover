@@ -1,9 +1,11 @@
 # Build artifacts
 rpm/BUILD_DIR/
-rpm/SOURCES/
+rpm/SOURCES/*.tar.gz
 rpm/output/srpms/
 rpm/build/
 rpm/RPMS/
+rpm/output/noarch/*.rpm
+rpm_issabel5/output/*.rpm
 
 # macOS
 .DS_Store
@@ -18,6 +20,18 @@ rpm/RPMS/
 
 # Test files
 test_*.php
+test_*.sh
+mikrotik_failover/SOURCES/
+
+# Temporary test/build scripts
+build_on_server*.sh
+build_v*.sh
+complete_build.sh
+download_*.sh
+fix_yum_and_build.sh
+install_and_test.sh
+run_test*.sh
+rpm/build_rpm.sh
 
 # Temporary
 *.tmp

@@ -1,250 +1,316 @@
 # MikroTik Failover Module for Issabel PBX
 
-Module for Issabel PBX that monitors SIP trunks and executes commands on a MikroTik router when a trunk becomes unreachable while the network is still operational.
+Module that monitors SIP trunk health and automatically executes recovery commands on MikroTik routers when specific failure conditions are detected.
 
 ## Features
 
-- **Real-time trunk monitoring** via Asterisk AMI events
-- **Intelligent failover detection**: Only triggers when trunk is unreachable but ping succeeds (network is up, SIP is down)
-- **MikroTik SSH integration**: Execute custom commands on your MikroTik router
-- **Email notifications**: Get alerts when trunks fail or recover
-- **Configurable retry logic**: Single or multiple retry attempts with intervals
-- **Cooldown period**: Prevent command flooding
-- **Event logging**: Full history of all events and actions
-- **Auto-start daemon**: Daemon starts automatically on boot
-- **Web-based configuration**: Easy setup through Issabel web interface
+- **Intelligent trunk monitoring**: Detects when SIP trunks become unreachable via AMI events
+- **Smart failover logic**: Only executes MikroTik commands when ping succeeds but SIP fails (NAT/conntrack issue)
+- **Automatic script generation**: Creates `del_conn` script on MikroTik to clear connection tracking
+- **Email notifications**: Alerts on trunk failures and recoveries
+- **Cooldown protection**: Prevents command flooding
+- **Web interface**: Full configuration through Issabel GUI
+- **Event logging**: Complete history of all events and actions
 
-## Requirements
+## Compatibility
 
-- Issabel PBX 4.x (CentOS 7)
-- PHP 5.4+ with SSH2 extension (installed automatically)
-- MikroTik router with SSH access enabled
+| Issabel Version | OS | PHP | RPM Suffix |
+|-----------------|-----|-----|------------|
+| Issabel 4 | CentOS 7 | 5.4+ | `.el7` |
+| Issabel 5 | Rocky Linux 8 | 7.4 | `.el8` |
 
 ## Installation
 
-### From RPM (Recommended)
+### Issabel 4 (CentOS 7)
 
 ```bash
-# Download the latest RPM
-wget https://github.com/campano/issabel-mikrotik-failover/releases/latest/download/issabel-mikrotik-failover-1.0.33-1.el7.noarch.rpm
+# Download RPM from GitHub releases
+wget https://github.com/carloscampano/issabel-mikrotik-failover/releases/download/v1.0.34/issabel-mikrotik-failover-1.0.34-1.el7.noarch.rpm
 
 # Install
-yum localinstall -y issabel-mikrotik-failover-1.0.33-1.el7.noarch.rpm
+yum install -y ./issabel-mikrotik-failover-1.0.34-1.el7.noarch.rpm
+```
+
+### Issabel 5 (Rocky Linux 8)
+
+```bash
+# Download RPM from GitHub releases
+wget https://github.com/carloscampano/issabel-mikrotik-failover/releases/download/v1.0.34/issabel-mikrotik-failover-1.0.34-1.el8.noarch.rpm
+
+# Install
+yum install -y ./issabel-mikrotik-failover-1.0.34-1.el8.noarch.rpm
 ```
 
 The module will be available at: **PBX > PBX Configuration > MikroTik Failover**
 
-### What gets installed
+## Dependencies
 
-- Module files in `/var/www/html/modules/mikrotik_failover/`
-- Logs module in `/var/www/html/modules/mikrotik_failover_logs/`
-- Privileged helper in `/usr/share/issabel/privileged/mikrotikfailover`
-- Systemd service in `/etc/systemd/system/mikrotik-failover.service`
-- SQLite database in `/var/www/db/mikrotik_failover.db`
+### Issabel 4
+- `issabel-framework >= 4.0`
+- `issabel-pbx`
+- `php >= 5.4`
+- `php-pecl-ssh2`
+- `php-PHPMailer`
+- `sqlite`
+
+### Issabel 5
+- `issabel-framework >= 5.0`
+- `issabel-pbx`
+- `php >= 7.4`
+- `php-pecl-ssh2` (from remi repository)
+- `php-PHPMailer`
+- `sqlite`
 
 ## Configuration
 
+After installation, access the module at:
+
+**PBX > PBX Configuration > MikroTik Failover**
+
 ### 1. MikroTik Configuration
 
-Enter your MikroTik router credentials:
-- **IP Address**: Router IP
+Configure SSH access to your MikroTik router:
+- **IP Address**: Router management IP
 - **SSH Port**: Usually 22
-- **Username**: SSH user with command execution permissions
-- **Password**: SSH password
+- **Username**: Admin user with script execution permissions
+- **Password**: User password
 
-Use "Test Connection" to verify connectivity.
+Click "Test Connection" to verify.
 
 ### 2. SMTP Configuration (Optional)
 
 Configure email notifications:
 - **SMTP Server**: Your mail server
-- **SMTP Port**: Usually 465 (SSL) or 587 (TLS)
-- **Username/Password**: SMTP credentials
-- **From/To Email**: Notification addresses
-- **Enabled**: Check to enable notifications
+- **Port**: 25, 465 (SSL), or 587 (TLS)
+- **Username/Password**: SMTP authentication
+- **From/To Email**: Sender and recipient addresses
 
 ### 3. Monitoring Configuration
 
 - **Delay before action**: Seconds to wait before checking ping (default: 10)
-- **Retry Mode**: Single or Multiple attempts
-- **Retry Count**: Number of retries (if multiple mode)
-- **Retry Interval**: Seconds between retries
-- **Cooldown Period**: Minimum seconds between actions for same trunk
+- **Retry mode**: Single or multiple attempts
+- **Cooldown period**: Minimum seconds between actions per trunk (default: 300)
 - **Enabled**: Must be checked for monitoring to work
 
-### 4. Commands to Execute
+### 4. Add Monitored Trunks
 
-Add MikroTik commands to execute when failover triggers:
+Select SIP trunks to monitor from the dropdown list.
 
-```
-/interface pppoe-client disable pppoe-out1
-/interface pppoe-client enable pppoe-out1
-```
+### 5. Generate Script
 
-Or log messages:
-```
-:log error message="Trunk failover triggered from Issabel"
-```
+Click "Generate Script" to:
+1. Create `del_conn` script on MikroTik
+2. Configure command to run: `/system script run del_conn`
 
-### 5. Monitored Trunks
-
-Select which SIP trunks to monitor from the dropdown list.
+The script clears connection tracking entries for PBX and trunk IPs.
 
 ## How It Works
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   Asterisk      │────▶│  Failover Daemon │────▶│    MikroTik     │
-│   (AMI Events)  │     │  (monitors SIP)  │     │   (SSH cmds)    │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-                               │
-                               ▼
-                        ┌──────────────────┐
-                        │  Decision Logic  │
-                        ├──────────────────┤
-                        │ Trunk UNREACHABLE│
-                        │ + Ping FAILS     │──▶ No action (network down)
-                        │                  │
-                        │ Trunk UNREACHABLE│
-                        │ + Ping OK        │──▶ Execute MikroTik commands
-                        └──────────────────┘
+Trunk UNREACHABLE detected (via AMI)
+         |
+         v
+    Wait delay period
+         |
+         v
+    Ping trunk IP ---------> FAILED --> Log event, send email
+         |                              (Network down - no action)
+         |
+      SUCCESS
+         |
+         v
+    Execute MikroTik commands
+    (/system script run del_conn)
+         |
+         v
+    Log event, send email, update cooldown
 ```
 
-1. Daemon listens for AMI `PeerStatus` events
-2. When a monitored trunk becomes `Unreachable`:
-   - Waits configured delay
-   - Pings the trunk IP
-   - If ping succeeds (network OK, SIP down) → Execute MikroTik commands
-   - If ping fails (network down) → Log event, no action
-3. Logs all events to database
-4. Sends email notifications (if enabled)
+### Event Types Monitored
+
+- **PeerStatus**: For SIP peers without registration
+- **Registry**: For SIP trunks with registration (Registered, Request Sent, etc.)
+
+## Directory Structure
+
+```
+/var/www/html/modules/mikrotik_failover/     # Main module
+/var/www/html/modules/mikrotik_failover_logs/ # Logs module
+/var/www/db/mikrotik_failover.db             # SQLite database
+/var/log/mikrotik_failover.log               # Daemon log
+/etc/systemd/system/mikrotik-failover.service # Systemd service
+/usr/share/issabel/privileged/mikrotikfailover # Privileged helper
+```
 
 ## Daemon Control
 
-### Via Web Interface
-Use the Start/Stop buttons in the "Monitoring Daemon" section.
-
-### Via Command Line
 ```bash
-# Start daemon
-systemctl start mikrotik-failover
-
-# Stop daemon
-systemctl stop mikrotik-failover
-
-# Check status
+# Status
 systemctl status mikrotik-failover
 
-# Enable on boot
+# Start/Stop/Restart
+systemctl start mikrotik-failover
+systemctl stop mikrotik-failover
+systemctl restart mikrotik-failover
+
+# Enable/Disable auto-start
 systemctl enable mikrotik-failover
-
-# Disable on boot
 systemctl disable mikrotik-failover
+
+# View logs
+tail -f /var/log/mikrotik_failover.log
 ```
 
-### Via issabel-helper
+## Building from Source
+
+### Prerequisites
+
+- Docker (for Issabel 4 builds on macOS/Linux)
+- Rocky Linux 8 system or Issabel 5 server (for Issabel 5 builds)
+
+### Build Commands
+
 ```bash
-/usr/bin/issabel-helper mikrotikfailover --start
-/usr/bin/issabel-helper mikrotikfailover --stop
-/usr/bin/issabel-helper mikrotikfailover --status
-/usr/bin/issabel-helper mikrotikfailover --restart
-/usr/bin/issabel-helper mikrotikfailover --enable
-/usr/bin/issabel-helper mikrotikfailover --disable
+# Build for both versions
+./build_rpm.sh both
+
+# Build only for Issabel 4
+./build_rpm.sh issabel4
+
+# Build only for Issabel 5
+./build_rpm.sh issabel5
 ```
 
-## Logs
+### Output Locations
 
-### File Log
+- **Issabel 4**: `rpm/output/noarch/issabel-mikrotik-failover-*.el7.noarch.rpm`
+- **Issabel 5**: `rpm_issabel5/output/issabel-mikrotik-failover-*.el8.noarch.rpm`
+
+### Project Structure
+
+```
+issabel_actions/
+├── mikrotik_failover/           # Main module source
+│   ├── index.php
+│   ├── libs/
+│   │   ├── paloSantoMikrotikFailover.class.php
+│   │   └── mikrotik_failover_daemon.php
+│   ├── themes/
+│   ├── lang/
+│   └── configs/
+├── mikrotik_failover_logs/      # Logs module source
+├── module_installer/            # Menu registration
+├── privileged/                  # Helper script
+├── systemd/                     # Service file
+├── rpm/                         # Issabel 4 build
+│   ├── SPECS/
+│   ├── SOURCES/
+│   ├── output/
+│   ├── Dockerfile
+│   └── build.sh
+├── rpm_issabel5/                # Issabel 5 build
+│   ├── SPECS/
+│   └── output/
+├── build_rpm.sh                 # Unified build script
+└── README.md
+```
+
+## Issabel 5 Specific Notes
+
+### Apache Permissions
+
+The Issabel 5 RPM automatically configures:
+1. Adds `apache` user to `asterisk` group
+2. Creates systemd drop-in to set socket permissions
+3. Configures `/var/run/asterisk/asterisk.ctl` access
+
+### Trunk Name Detection
+
+Supports both:
+- Traditional trunk names (e.g., `MyProvider`)
+- Numeric trunk names with >6 digits (e.g., `56413290350/56413290350`)
+
+## Troubleshooting
+
+### Module not showing trunks (Issabel 5)
+
+Check Apache access to Asterisk:
+```bash
+sudo -u apache asterisk -rx "sip show peers"
+```
+
+If "Permission denied", verify socket permissions:
+```bash
+ls -la /var/run/asterisk/asterisk.ctl
+# Should be: srw-rw---- asterisk apache
+```
+
+Fix manually if needed:
+```bash
+chgrp apache /var/run/asterisk/asterisk.ctl
+chmod 660 /var/run/asterisk/asterisk.ctl
+```
+
+### SSH2 extension not loaded
+
+```bash
+# Check if loaded
+php -m | grep ssh2
+
+# Issabel 4: Should be installed automatically
+yum install php-pecl-ssh2
+
+# Issabel 5: Install from remi
+yum install php-pecl-ssh2
+
+# Restart Apache
+systemctl restart httpd
+```
+
+### Daemon not detecting events
+
+Check AMI connection:
 ```bash
 tail -f /var/log/mikrotik_failover.log
 ```
 
-### Database Log
-Access via web interface: "View Logs" button
+Verify AMI credentials in `/etc/issabel.conf`.
 
-## Troubleshooting
+### Test Connection fails
 
-### Daemon won't start
-```bash
-# Check log for errors
-tail -50 /var/log/mikrotik_failover.log
-
-# Check if AMI is accessible
-asterisk -rx "manager show connected"
-```
-
-### Commands not executing
-1. Verify "Enabled" checkbox in Monitoring Configuration is checked
-2. Verify trunk is in Monitored Trunks list
-3. Check that ping to trunk IP succeeds when trunk is unreachable
-4. Verify MikroTik credentials with "Test Connection"
-
-### No events detected
-1. Ensure daemon is running: `systemctl status mikrotik-failover`
-2. Verify trunk is monitored and enabled
-3. Check AMI connection in log file
-
-## Building from Source
-
-### Requirements
-- Docker
-- macOS or Linux
-
-### Build RPM
-```bash
-cd rpm
-./build.sh 1.0.33
-```
-
-RPM will be created in `rpm/output/noarch/`
+1. Verify MikroTik SSH is enabled
+2. Check firewall allows port 22
+3. Verify username/password
+4. Test manually: `ssh user@mikrotik-ip`
 
 ## Version History
 
-### v1.0.33 (2024-12-20)
+### 1.0.34 (2024-12-22)
+- **Issabel 5 support** (Rocky Linux 8, PHP 7.4)
+- Fixed Apache user permissions for Asterisk socket access
+- Added systemd drop-in for persistent socket permissions
+- Fixed detection of numeric trunk names (>6 digits)
+- Fixed IP detection with port suffix (192.168.1.1:5060)
+- Fixed hostname resolution for ToHost field
+- Improved regex for variable SIP peer output format
+- Updated code for PHP 7.4 compatibility
+
+### 1.0.33 (2024-12-20)
 - Added support for Registry AMI events (SIP trunks with registration)
-- Now detects both PeerStatus and Registry events for trunk monitoring
-- Emails sent on trunk down and restored states
+- Detects both PeerStatus and Registry events
+- Email notifications on trunk state changes
 
-### v1.0.32 (2024-12-20)
-- Fixed email notifications to use PHPMailer with SMTP configuration
-- Emails now properly sent on trunk state changes (unreachable/restored)
+### 1.0.32 (2024-12-20)
+- Fixed email notifications with PHPMailer
 
-### v1.0.31 (2024-12-20)
-- Added Apache restart in post-install to load SSH2 extension automatically
+### 1.0.31 (2024-12-20)
+- Apache restart in post-install for SSH2
 
-### v1.0.30 (2024-12-18)
-- Generate Script creates persistent `del_conn` script in MikroTik
-- Script uploaded via SFTP and registered as system script
-- Failover command now uses `/system script run del_conn`
+### 1.0.30 (2024-12-18)
+- Persistent del_conn script on MikroTik
 
-### v1.0.29 (2024-12-18)
-- Fixed script upload to MikroTik using SFTP method
-- Changed failover command to use `/import file-name=delete_conn.rsc`
-
-### v1.0.26 (2024-12-18)
-- Monitoring enabled by default on fresh install
-- Daemon auto-starts and enables on boot after installation
-- Fixed module installer path structure
-- Title color fixed for better visibility
-
-### v1.0.25
-- Fixed title visibility on gray background
-
-### v1.0.24
-- Added "Auto-start on boot" checkbox option
-
-### v1.0.23
-- Fixed SMTP port label
-- Changed default SMTP port to 465
-
-### v1.0.22
-- Fixed module_installer nested directory bug
-
-### v1.0.21
-- Improved daemon start/stop button styling
-
-### v1.0.20
-- Fixed button icon styling issues
+### 1.0.29 (2024-12-18)
+- Fixed script upload using SFTP method
 
 ## License
 
@@ -253,7 +319,3 @@ GPLv3+
 ## Author
 
 Developed for Issabel PBX
-
-## Support
-
-For issues and feature requests, please use the GitHub issue tracker.

@@ -12,9 +12,10 @@ Source0:        %{name}-%{version}.tar.gz
 BuildArch:      noarch
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
-Requires:       issabel-framework >= 4.0
+# Dependencies for Issabel 5 / Rocky Linux 8 / PHP 7.4
+Requires:       issabel-framework >= 5.0
 Requires:       issabel-pbx
-Requires:       php >= 5.4
+Requires:       php >= 7.4
 Requires:       php-pecl-ssh2
 Requires:       php-PHPMailer
 Requires:       sqlite
@@ -31,6 +32,8 @@ Features:
 - Email notifications
 - Event logging and cooldown protection
 - Web-based configuration interface
+
+Compatible with Issabel 5 on Rocky Linux 8 with PHP 7.4.
 
 %prep
 %setup -q -n %{name}-%{version}
@@ -111,7 +114,24 @@ systemctl daemon-reload
 systemctl enable mikrotik-failover 2>/dev/null || true
 systemctl start mikrotik-failover 2>/dev/null || true
 
-# Restart Apache to load SSH2 extension
+# Issabel 5 specific: Configure Apache access to Asterisk socket
+usermod -a -G asterisk apache 2>/dev/null || true
+
+# Create systemd drop-in for Asterisk socket permissions
+mkdir -p /etc/systemd/system/asterisk.service.d/
+cat > /etc/systemd/system/asterisk.service.d/socket-perms.conf << 'EOFDRP'
+[Service]
+ExecStartPost=/bin/bash -c "sleep 2 && chgrp apache /var/run/asterisk/asterisk.ctl 2>/dev/null && chmod 660 /var/run/asterisk/asterisk.ctl 2>/dev/null || true"
+EOFDRP
+systemctl daemon-reload
+
+# Apply socket permissions now if Asterisk is running
+if [ -S /var/run/asterisk/asterisk.ctl ]; then
+    chgrp apache /var/run/asterisk/asterisk.ctl 2>/dev/null || true
+    chmod 660 /var/run/asterisk/asterisk.ctl 2>/dev/null || true
+fi
+
+# Restart Apache to load SSH2 extension and apply group membership
 systemctl restart httpd 2>/dev/null || true
 
 echo ""
@@ -158,43 +178,16 @@ fi
 
 %changelog
 * Sun Dec 22 2024 Developer <dev@example.com> - 1.0.34-1
+- Issabel 5 / Rocky Linux 8 / PHP 7.4 compatible version
+- Fixed Apache user permissions for Asterisk socket access
+- Added systemd drop-in for persistent socket permissions
 - Fixed detection of numeric trunk names (>6 digits)
 - Fixed IP detection with port suffix (192.168.1.1:5060)
 - Fixed hostname resolution for ToHost field
 - Improved regex for variable SIP peer output format
-- Code compatible with both Issabel 4 (PHP 5.x) and Issabel 5 (PHP 7.4)
+- Updated code for PHP 7.4 compatibility (public vs var)
 
-* Fri Dec 20 2024 Developer <dev@example.com> - 1.0.33-1
+* Sun Dec 22 2024 Developer <dev@example.com> - 1.0.33-1
 - Added support for Registry AMI events (SIP trunks with registration)
 - Now detects both PeerStatus and Registry events for trunk monitoring
 - Emails sent on trunk down (Request Sent/Unregistered) and restored (Registered)
-
-* Fri Dec 20 2024 Developer <dev@example.com> - 1.0.32-1
-- Fixed email notifications to use PHPMailer with SMTP configuration
-- Emails now sent on trunk state changes (unreachable/restored)
-
-* Fri Dec 20 2024 Developer <dev@example.com> - 1.0.31-1
-- Added Apache restart in post-install to load SSH2 extension
-
-* Thu Dec 18 2024 Developer <dev@example.com> - 1.0.30-1
-- Generate Script now creates persistent del_conn script in MikroTik
-- Script is uploaded via SFTP and then registered as system script
-- Failover command is now /system script run del_conn
-- Script can be viewed/edited in MikroTik System > Scripts
-
-* Thu Dec 18 2024 Developer <dev@example.com> - 1.0.29-1
-- Fixed script upload to MikroTik using SFTP method
-- Changed failover command to use /import file-name=delete_conn.rsc
-- Script file is now stored as .rsc file on MikroTik for reliable execution
-
-* Tue Dec 17 2024 Developer <dev@example.com> - 1.0.24-1
-- Added auto-start on boot checkbox option in daemon section
-- Added --enable and --disable options to privileged helper
-
-* Tue Dec 17 2024 Developer <dev@example.com> - 1.0.0-1
-- Initial RPM release
-- SIP trunk monitoring with automatic failover
-- MikroTik command execution via SSH
-- Email notifications
-- Web-based configuration interface
-- Event logging with cooldown protection

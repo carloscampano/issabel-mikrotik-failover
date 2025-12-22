@@ -169,17 +169,34 @@ function ping_host($ip, $count = 3) {
 }
 
 function get_trunk_ip($trunk_name) {
-    $output = array();
-    exec("/usr/sbin/asterisk -rx 'sip show peer " . escapeshellarg($trunk_name) . "' 2>/dev/null", $output);
+    // Remove /username suffix if present
+    $peer_name = explode('/', $trunk_name)[0];
 
+    $output = array();
+    exec("/usr/sbin/asterisk -rx 'sip show peer " . escapeshellarg($peer_name) . "' 2>/dev/null", $output);
+
+    $tohost = null;
     foreach ($output as $line) {
+        // Addr->IP may include port: 190.196.211.162:5060
         if (preg_match('/^\s*Addr->IP\s*:\s*(\d+\.\d+\.\d+\.\d+)/', $line, $matches)) {
             return $matches[1];
         }
-        // También buscar en el formato alternativo
-        if (preg_match('/^\s*Tohost\s*:\s*(\d+\.\d+\.\d+\.\d+)/', $line, $matches)) {
-            return $matches[1];
+        // ToHost can be IP or hostname
+        if (preg_match('/^\s*ToHost\s*:\s*(\S+)/i', $line, $matches)) {
+            $tohost = $matches[1];
         }
+    }
+
+    // If we found a ToHost, resolve it if it's a hostname
+    if ($tohost) {
+        if (preg_match('/^\d+\.\d+\.\d+\.\d+$/', $tohost)) {
+            return $tohost;
+        }
+        $ip = gethostbyname($tohost);
+        if ($ip !== $tohost) {
+            return $ip;
+        }
+        return $tohost;
     }
 
     // Intentar obtener de sip show peers
@@ -187,6 +204,9 @@ function get_trunk_ip($trunk_name) {
     exec("/usr/sbin/asterisk -rx 'sip show peers' 2>/dev/null", $output);
     foreach ($output as $line) {
         if (preg_match('/^' . preg_quote($trunk_name, '/') . '\s+(\d+\.\d+\.\d+\.\d+)/', $line, $matches)) {
+            return $matches[1];
+        }
+        if (preg_match('/^' . preg_quote($peer_name, '/') . '\/\S+\s+(\d+\.\d+\.\d+\.\d+)/', $line, $matches)) {
             return $matches[1];
         }
     }

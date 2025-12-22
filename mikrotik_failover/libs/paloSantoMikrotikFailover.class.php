@@ -8,7 +8,7 @@
 
 class paloSantoMikrotikFailover {
     private $_DB;
-    var $errMsg;
+    public $errMsg;
 
     function __construct(&$pDB)
     {
@@ -361,8 +361,16 @@ class paloSantoMikrotikFailover {
             // Parse lines that look like trunk entries (not headers or summary)
             if (preg_match('/^(\S+)\s+(\d+\.\d+\.\d+\.\d+|\(Unspecified\))\s+/', $line, $matches)) {
                 $name = $matches[1];
-                // Skip numeric-only entries (extensions) and get only trunks
-                if (!preg_match('/^\d+\/\d+$/', $name) && !preg_match('/^\d+$/', $name)) {
+                // Skip short numeric entries (extensions typically 3-5 digits)
+                // Keep longer numeric entries (trunks with phone numbers) and non-numeric names
+                $baseName = explode('/', $name)[0];
+                if (preg_match('/^\d+$/', $baseName)) {
+                    // It's numeric - only include if longer than 6 digits (likely a trunk)
+                    if (strlen($baseName) > 6) {
+                        $trunks[] = $name;
+                    }
+                } else {
+                    // Non-numeric name - include it (traditional trunk name)
                     $trunks[] = $name;
                 }
             }
@@ -506,15 +514,18 @@ class paloSantoMikrotikFailover {
 
         foreach ($output as $line) {
             // Parse format: Name/username  Host   Dyn Forcerport Comedia  ACL Port Status  Description
-            // Example: Caudales_Trunk     190.98.175.5  D  Yes Yes  A  5060  OK (15 ms)
-            if (preg_match('/^(\S+)\s+(\d+\.\d+\.\d+\.\d+|\(Unspecified\))\s+(\S*)\s+(\S+)\s+(\S+)\s+(\S*)\s+(\d+)\s+(.+)$/', $line, $matches)) {
+            // Example: 56413290350/56413290350   190.196.211.162    No  Yes    5060  OK (11 ms)
+            // More flexible regex to handle variable spacing
+            if (preg_match('/^(\S+)\s+(\d+\.\d+\.\d+\.\d+|\(Unspecified\))\s+.*?\s+(\d+)\s+(OK\s*\(\d+\s*ms\)|UNREACHABLE|LAGGED|UNKNOWN|Unmonitored)/', $line, $matches)) {
                 $name = $matches[1];
                 $ip = $matches[2];
-                $port = $matches[7];
-                $status_raw = trim($matches[8]);
+                $port = $matches[3];
+                $status_raw = trim($matches[4]);
 
-                // Skip numeric-only entries (extensions)
-                if (preg_match('/^\d+\/\d+$/', $name) || preg_match('/^\d+$/', $name)) {
+                // Skip short numeric entries (extensions typically 3-5 digits)
+                // Keep longer numeric entries (trunks) and non-numeric names
+                $baseName = explode('/', $name)[0];
+                if (preg_match('/^\d+$/', $baseName) && strlen($baseName) <= 6) {
                     continue;
                 }
 
@@ -624,16 +635,37 @@ class paloSantoMikrotikFailover {
      */
     function getTrunkIp($trunk_name)
     {
-        $output = array();
-        exec("/usr/sbin/asterisk -rx 'sip show peer " . escapeshellarg($trunk_name) . "' 2>/dev/null", $output);
+        // Remove /username suffix if present
+        $peer_name = explode('/', $trunk_name)[0];
 
+        $output = array();
+        exec("/usr/sbin/asterisk -rx 'sip show peer " . escapeshellarg($peer_name) . "' 2>/dev/null", $output);
+
+        $tohost = null;
         foreach ($output as $line) {
+            // Addr->IP may include port: 190.196.211.162:5060
             if (preg_match('/^\s*Addr->IP\s*:\s*(\d+\.\d+\.\d+\.\d+)/', $line, $matches)) {
                 return $matches[1];
             }
-            if (preg_match('/^\s*Tohost\s*:\s*(\d+\.\d+\.\d+\.\d+)/', $line, $matches)) {
-                return $matches[1];
+            // ToHost can be IP or hostname
+            if (preg_match('/^\s*ToHost\s*:\s*(\S+)/i', $line, $matches)) {
+                $tohost = $matches[1];
             }
+        }
+
+        // If we found a ToHost, resolve it if it's a hostname
+        if ($tohost) {
+            // Check if it's already an IP
+            if (preg_match('/^\d+\.\d+\.\d+\.\d+$/', $tohost)) {
+                return $tohost;
+            }
+            // Try to resolve hostname
+            $ip = gethostbyname($tohost);
+            if ($ip !== $tohost) {
+                return $ip;
+            }
+            // Return hostname if can't resolve (better than null)
+            return $tohost;
         }
 
         // Try from sip show peers
@@ -641,6 +673,10 @@ class paloSantoMikrotikFailover {
         exec("/usr/sbin/asterisk -rx 'sip show peers' 2>/dev/null", $output);
         foreach ($output as $line) {
             if (preg_match('/^' . preg_quote($trunk_name, '/') . '\s+(\d+\.\d+\.\d+\.\d+)/', $line, $matches)) {
+                return $matches[1];
+            }
+            // Also try with just the peer name
+            if (preg_match('/^' . preg_quote($peer_name, '/') . '\/\S+\s+(\d+\.\d+\.\d+\.\d+)/', $line, $matches)) {
                 return $matches[1];
             }
         }
