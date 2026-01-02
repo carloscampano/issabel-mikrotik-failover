@@ -1,8 +1,9 @@
 %define modname mikrotik_failover
 %define modname_logs mikrotik_failover_logs
+%define modname_rate_limit mikrotik_failover_rate_limit
 
 Name:           issabel-mikrotik-failover
-Version:        1.0.34
+Version:        1.0.35
 Release:        1%{?dist}
 Summary:        MikroTik Failover Module for Issabel PBX
 License:        GPLv3+
@@ -49,6 +50,14 @@ cp -r module/* %{buildroot}/var/www/html/modules/%{modname}/
 mkdir -p %{buildroot}/var/www/html/modules/%{modname_logs}
 cp -r module_logs/* %{buildroot}/var/www/html/modules/%{modname_logs}/
 
+# Rate Limit module directory
+mkdir -p %{buildroot}/var/www/html/modules/%{modname_rate_limit}
+cp -r module_rate_limit/* %{buildroot}/var/www/html/modules/%{modname_rate_limit}/
+
+# AGI scripts
+mkdir -p %{buildroot}/var/lib/asterisk/agi-bin
+install -m 755 scripts/rate_limit.agi %{buildroot}/var/lib/asterisk/agi-bin/
+
 # Privileged helper
 mkdir -p %{buildroot}/usr/share/issabel/privileged
 install -m 755 privileged/mikrotikfailover %{buildroot}/usr/share/issabel/privileged/
@@ -84,6 +93,18 @@ chmod +x /var/www/html/modules/%{modname}/libs/mikrotik_failover_daemon.php
 
 chown -R asterisk:asterisk /var/www/html/modules/%{modname_logs}
 chmod -R 755 /var/www/html/modules/%{modname_logs}
+
+chown -R asterisk:asterisk /var/www/html/modules/%{modname_rate_limit}
+chmod -R 755 /var/www/html/modules/%{modname_rate_limit}
+
+# Set permissions on AGI scripts
+chown asterisk:asterisk /var/lib/asterisk/agi-bin/rate_limit.agi
+chmod 755 /var/lib/asterisk/agi-bin/rate_limit.agi
+
+# Create rate limit log file
+touch /var/log/asterisk/rate_limit.log
+chmod 666 /var/log/asterisk/rate_limit.log
+chown asterisk:asterisk /var/log/asterisk/rate_limit.log
 
 # Create database if not exists
 if [ ! -f /var/www/db/mikrotik_failover.db ]; then
@@ -157,6 +178,12 @@ fi
 /etc/systemd/system/mikrotik-failover.service
 
 %changelog
+* Thu Jan 02 2025 Developer <dev@example.com> - 1.0.35-1
+- Fixed AMI buffer overflow that caused Asterisk to become unresponsive
+- Added EventMask filter to only receive system,call events
+- Prevents TCP buffer accumulation that blocked operator panel and calls
+- Issue manifested after ~6 days of daemon uptime
+
 * Sun Dec 22 2024 Developer <dev@example.com> - 1.0.34-1
 - Fixed detection of numeric trunk names (>6 digits)
 - Fixed IP detection with port suffix (192.168.1.1:5060)

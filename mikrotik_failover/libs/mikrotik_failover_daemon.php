@@ -392,6 +392,20 @@ function connect_ami() {
 
     if (strpos($response, 'Success') !== false) {
         log_message("AMI login successful");
+
+        // IMPORTANTE: Filtrar solo eventos PeerStatus y Registry
+        // Esto evita acumulacion de eventos en el buffer TCP que
+        // causaban bloqueo del AMI despues de varios dias de operacion
+        $filter = "Action: Events\r\n";
+        $filter .= "EventMask: system,call\r\n";
+        $filter .= "\r\n";
+        fwrite($ami_socket, $filter);
+        // Consumir respuesta del filtro
+        while (($line = fgets($ami_socket)) !== false) {
+            if (trim($line) === '') break;
+        }
+        log_message("AMI event filter applied");
+
         return true;
     } else {
         log_message("AMI login failed: $response");
